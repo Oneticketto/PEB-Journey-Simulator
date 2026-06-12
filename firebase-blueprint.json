@@ -1,0 +1,92 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "ข้อมูลโปรไฟล์ผู้ใช้งานนักศึกษาระบบจำลอง PEB",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "ที่อยู่อีเมลสถาบัน (@dpu.ac.th)" },
+        "displayName": { "type": "string", "description": "ชื่อผู้แสดงผล" },
+        "role": { "type": "string", "description": "บทบาทผู้ใช้ เช่น student, guest หรือ admin" },
+        "badges": { "type": "array", "description": "รายการเหรียญรางวัลรางวัลสิ่งแวดล้อมที่ผู้เขียนสะสม" },
+        "totalGames": { "type": "number", "description": "จำนวนรอบเกมที่เล่นทั้งหมด" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "เวลาสร้างบัญชี" }
+      },
+      "required": ["email", "displayName", "role", "badges", "totalGames", "createdAt"]
+    },
+    "Session": {
+      "title": "Gameplay Session",
+      "description": "ข้อมูลจำลองผลการเล่นเกม 5-6 สถานการณ์รายบุคคล",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "รหัสผู้ใช้" },
+        "answers": { "type": "array", "description": "รายการคำตอบแต่ละด่านในเซสชัน" },
+        "pebScore": { "type": "number", "description": "คะแนนพฤติกรรมรักษ์โลกเฉลี่ย (1-10)" },
+        "carbonScore": { "type": "number", "description": "สรุปรอยเท้าคาร์บอนสุทธิ (กิโลกรัม CO2)" },
+        "ecoProfile": { "type": "string", "description": "โปรไฟล์รักษ์โลกที่จำลองได้ เช่น Earth Guardian" },
+        "commitment": { "type": "string", "description": "เป้าหมายรักษ์โลกที่ให้คำสัญญา" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "เวลาเล่นเสร็จสิ้น" }
+      },
+      "required": ["uid", "answers", "pebScore", "carbonScore", "ecoProfile", "commitment", "timestamp"]
+    },
+    "Leaderboard": {
+      "title": "Leaderboard Row",
+      "description": "ตารางอันดับเกียรติยศผู้พิทักษ์โลก",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "รหัสผู้ใช้" },
+        "displayName": { "type": "string", "description": "ชื่อเล่นหรือชื่อย่อแสดงความเห็น" },
+        "score": { "type": "number", "description": "คะแนนรักษ์โลกสูงสุดเพื่อจัดอันดับ" },
+        "rank": { "type": "number", "description": "อันดับจากการคำนวณ" },
+        "lastUpdated": { "type": "string", "format": "date-time", "description": "เวลาอัปเดตคะแนนล่าสุด" }
+      },
+      "required": ["uid", "displayName", "score", "rank", "lastUpdated"]
+    },
+    "Commitment": {
+      "title": "User Commitment",
+      "description": "คำสัญญารักษ์โลกรายบุคคล",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "รหัสผู้ใช้" },
+        "goal": { "type": "string", "description": "ข้อความเป้าหมายรักษ์โลกที่เลือก" },
+        "completed": { "type": "boolean", "description": "ผู้ใช้ยืนยันการทำสัญญานี้สำเร็จแล้วหรือไม่" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "เวลาเลือกคำสัญญา" }
+      },
+      "required": ["uid", "goal", "completed", "createdAt"]
+    },
+    "CampusState": {
+      "title": "Global Campus State",
+      "description": "คะแนนและดัชนีสถานะเชิงนิเวศของมหาวิทยาลัย DPU ร่วมกัน",
+      "type": "object",
+      "properties": {
+        "greenCampusIndex": { "type": "number", "description": "ดัชนีวิทยเขตสีเขียวภาพรวมของชุมชน (0-100)" },
+        "weeklyEvent": { "type": "string", "description": "เหตุการณ์สิ่งแวดล้อมรายสัปดาห์ในปัจจุบัน" },
+        "monthlyEvent": { "type": "string", "description": "ความท้าทายระดับเดือนในปัจจุบัน" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "เวลาอัปเดตดัชนีล่าสุด" }
+      },
+      "required": ["greenCampusIndex", "weeklyEvent", "monthlyEvent", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "เอกสารโปรไฟล์ของนักเรียนในมหาวิทยาลัย"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Session",
+      "description": "บันทึกข้อมูลการตัดสินใจช่วงเซสชันจำลอง"
+    },
+    "/leaderboard/{uid}": {
+      "schema": "Leaderboard",
+      "description": "อันดับผลการประเมินเพื่อเชิดชูคนเก่งรักษ์โลกบนตารางผู้นำ"
+    },
+    "/commitments/{id}": {
+      "schema": "Commitment",
+      "description": "ประวัติการให้คำสัญญาเพื่อติดตามความต่อเนื่องพฤติกรรม"
+    },
+    "/campus_state/global": {
+      "schema": "CampusState",
+      "description": "สถานะนิเวศภาพรวมร่วมของทุกล็อบบี้การเล่นใน ม."
+    }
+  }
+}

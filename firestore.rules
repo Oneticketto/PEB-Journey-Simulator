@@ -1,0 +1,118 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net - Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Users Collection ---
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      // Validation Helper for User creation / modification
+      function isValidUser(data) {
+        return data.keys().hasAll(['email', 'displayName', 'role', 'badges', 'totalGames', 'createdAt'])
+          && data.keys().size() == 6
+          && (data.email == null || (data.email is string && data.email.size() <= 150))
+          && data.displayName is string && data.displayName.size() <= 100
+          && data.role is string && (data.role == 'student' || data.role == 'guest' || data.role == 'admin')
+          && data.badges is list && data.badges.size() <= 20
+          && data.totalGames is number
+          && data.createdAt != null;
+      }
+
+      allow create: if isOwner(uid) && isValidUser(incoming()) && incoming().createdAt == request.time;
+      allow update: if isOwner(uid) && isValidUser(incoming()) && incoming().createdAt == existing().createdAt;
+    }
+
+    // --- Sessions Collection ---
+    match /sessions/{sessionId} {
+      allow get: if isSignedIn() && existing().uid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+
+      function isValidSession(data) {
+        return data.keys().hasAll(['uid', 'answers', 'pebScore', 'carbonScore', 'ecoProfile', 'commitment', 'timestamp'])
+          && data.keys().size() == 7
+          && data.uid == request.auth.uid
+          && data.answers is list && data.answers.size() <= 10
+          && data.pebScore is number
+          && data.carbonScore is number
+          && data.ecoProfile is string && data.ecoProfile.size() <= 50
+          && data.commitment is string && data.commitment.size() <= 100
+          && data.timestamp != null;
+      }
+
+      allow create: if isSignedIn() && isValidSession(incoming()) && incoming().timestamp == request.time;
+      allow update, delete: if false; // Sessions are immutable histories once saved
+    }
+
+    // --- Leaderboard Collection ---
+    match /leaderboard/{uid} {
+      // Publicly viewable by anyone, authenticated write/update by the document owner
+      allow read: if true;
+
+      function isValidLeaderboardEntry(data) {
+        return data.keys().hasAll(['uid', 'displayName', 'score', 'rank', 'lastUpdated'])
+          && data.keys().size() == 5
+          && data.uid == request.auth.uid
+          && data.displayName is string && data.displayName.size() <= 100
+          && data.score is number
+          && data.rank is number
+          && data.lastUpdated != null;
+      }
+
+      allow create: if isOwner(uid) && isValidLeaderboardEntry(incoming()) && incoming().lastUpdated == request.time;
+      allow update: if isOwner(uid) && isValidLeaderboardEntry(incoming()) && incoming().lastUpdated == request.time;
+      allow delete: if isOwner(uid);
+    }
+
+    // --- Commitments Collection ---
+    match /commitments/{id} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+
+      function isValidCommitment(data) {
+        return data.keys().hasAll(['uid', 'goal', 'completed', 'createdAt'])
+          && data.keys().size() == 4
+          && data.uid == request.auth.uid
+          && data.goal is string && data.goal.size() <= 200
+          && data.completed is bool
+          && data.createdAt != null;
+      }
+
+      allow create: if isSignedIn() && isValidCommitment(incoming()) && incoming().uid == request.auth.uid && incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidCommitment(incoming()) && incoming().uid == request.auth.uid && incoming().completed is bool;
+      allow delete: if isSignedIn() && existing().uid == request.auth.uid;
+    }
+
+    // --- Campus State Collection ---
+    match /campus_state/{document} {
+      // Config or Global index is readable by anyone
+      allow read: if true;
+      // Admin update only, simulated as write block for clients (updates driven through client accumulation or local mock state edits backended inside client is safe if client checks read-only on real db)
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "PEB Journey Simulator",
+  "description": "เครื่องมือจำลองการตัดสินใจด้านสิ่งแวดล้อมของนักศึกษามหาวิทยาลัย เพื่อส่งเสริมดัชนีวิทยเขตสีเขียว (Green Campus Index) และคำนวณรอยเท้าคาร์บอนรายบุคคล ในรูปแบบเกมจำลองสถานการณ์",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
