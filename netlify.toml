@@ -1,0 +1,20 @@
+# Netlify Production Configuration File
+# This file automates building and routing settings when deploying the project from GitHub to Netlify.
+
+[build]
+  # The script to build your production frontend static bundle
+  command = "npm run build"
+  # The output directory after building (where entry point and bundles are stored)
+  publish = "dist"
+
+[build.environment]
+  # Specify custom Node environment values if needed
+  NODE_VERSION = "20"
+  GENERATE_SOURCEMAP = "false"
+
+# Redirect rules: Necessary to allow standard client-side SPA routing 
+# (prevents 404 errors when users refresh on custom page/routes)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
