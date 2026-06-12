@@ -372,7 +372,7 @@ export async function saveSession(session: GameplaySession) {
 }
 
 // Helper badge logic based on user session decision parameters
-function evaluateBadgesEarned(session: GameplaySession): string[] {
+export function evaluateBadgesEarned(session: GameplaySession): string[] {
   const list: string[] = ['badge_sustainability_explorer'];
   if (session.pebScore >= 8.5) {
     list.push('badge_earth_guardian');

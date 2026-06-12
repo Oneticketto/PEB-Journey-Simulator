@@ -12,13 +12,14 @@ import {
   getActiveCommitment, 
   updateCommitmentStatus, 
   selectCommitment, 
-  fetchGlobalCampusState,
-  scoreCampusIndexCommunity,
-  updateGlobalCampusState,
-  UserProfile,
-  LocalCommitment,
-  GlobalCampusState,
-  GameplaySession
+  fetchGlobalCampusState, 
+  scoreCampusIndexCommunity, 
+  updateGlobalCampusState, 
+  UserProfile, 
+  LocalCommitment, 
+  GlobalCampusState, 
+  GameplaySession,
+  evaluateBadgesEarned
 } from "./firebase";
 import { SCENARIOS, ECO_PROFILES, BADGES, EVENTS, Scenario, Choice } from "./data/scenarios";
 import TutorialMode from "./components/TutorialMode";
@@ -26,6 +27,7 @@ import ActiveEventWidget from "./components/ActiveEventWidget";
 import BadgeCollector from "./components/BadgeCollector";
 import LeaderboardView from "./components/LeaderboardView";
 import GreenCampusIndexWidget from "./components/GreenCampusIndexWidget";
+import BehaviorHub from "./components/BehaviorHub";
 
 import { 
   Globe, 
@@ -109,9 +111,12 @@ export default function App() {
         
         // Check for previous uncompleted commitment for follow-up popup!
         const prevGoal = await getActiveCommitment(user.uid);
-        if (prevGoal && !prevGoal.completed) {
-          setPrevCommitment(prevGoal);
-          setShowCommitmentModal(true);
+        if (prevGoal) {
+          setActiveCommitment(prevGoal);
+          if (!prevGoal.completed) {
+            setPrevCommitment(prevGoal);
+            setShowCommitmentModal(true);
+          }
         }
       } else {
         setProfile(null);
@@ -362,6 +367,19 @@ export default function App() {
     setResultsConvenience(avgConvenience);
     setResultsEcoProfile(topProfile);
 
+    // Calculate badges earned in this daily simulation session
+    const tmpSession: GameplaySession = {
+      uid: currentUser?.uid || "guest",
+      answers: sessionAnswers,
+      pebScore: avgPeb,
+      carbonScore: totalCarbon,
+      ecoProfile: topProfile.name,
+      commitment: "",
+      timestamp: new Date().toISOString()
+    };
+    const earned = evaluateBadgesEarned(tmpSession);
+    setResultsBadgesEarned(earned);
+
     setGameState('results');
     getAIFeedback(sessionAnswers, topProfile, avgPeb, totalCarbon);
   };
@@ -411,6 +429,10 @@ export default function App() {
     if (!currentUser) return;
     await selectCommitment(currentUser.uid, goal);
     
+    // Also save in state representing active commitment
+    const latestCommit = await getActiveCommitment(currentUser.uid);
+    setActiveCommitment(latestCommit);
+    
     // Submit Session results to database
     const finalSession: GameplaySession = {
       uid: currentUser.uid,
@@ -436,10 +458,37 @@ export default function App() {
     setGameState('dashboard');
   };
 
+  const handleSelectGoalHub = async (goal: string) => {
+    if (!currentUser) return;
+    await selectCommitment(currentUser.uid, goal);
+    const latestCommit = await getActiveCommitment(currentUser.uid);
+    setActiveCommitment(latestCommit);
+  };
+
+  const handleCompleteCommitmentAndReason = async (success: boolean, followUpReason: string) => {
+    if (!currentUser) return;
+    await updateCommitmentStatus(currentUser.uid, success);
+    const latestCommit = await getActiveCommitment(currentUser.uid);
+    setActiveCommitment(latestCommit);
+    
+    // Add points based on success or honesty report
+    const bonus = success ? 3 : 1;
+    await scoreCampusIndexCommunity(bonus);
+    
+    const uProfile = await fetchProfile(currentUser.uid);
+    setProfile(uProfile);
+    const nextCamp = await fetchGlobalCampusState();
+    setCampusState(nextCamp);
+  };
+
   // Reset and play on
   const checkPrevCommitment = async (isSuccess: boolean) => {
     if (currentUser && prevCommitment) {
       await updateCommitmentStatus(currentUser.uid, isSuccess);
+      
+      // Update active commitment state
+      const latestCommit = await getActiveCommitment(currentUser.uid);
+      setActiveCommitment(latestCommit);
       
       // If success, user community index receives extra eco points!
       if (isSuccess) {
@@ -680,6 +729,17 @@ export default function App() {
                 />
               )}
 
+              {/* BEHAVIOR CHANGE & COMMITMENT HUB */}
+              {currentUser && (
+                <BehaviorHub
+                  activeCommitment={activeCommitment}
+                  onSelectCommitment={handleSelectGoalHub}
+                  onCompleteCommitment={handleCompleteCommitmentAndReason}
+                  latestEcoProfile={resultsEcoProfile ? resultsEcoProfile.name : (profile?.role === "guest" ? "Eco Explorer" : "Earth Guardian")}
+                  latestPebScore={resultsPEB || 7.5}
+                />
+              )}
+
               {/* BEGIN GAMEPLAY CARD (Hero Banner) */}
               <div className="w-full bg-gradient-to-r from-emerald-950/70 to-teal-950/70 border border-emerald-500/20 text-white rounded-3xl p-6 sm:p-8 shadow-2xl flex flex-col md:flex-row items-center justify-between text-center md:text-left gap-6 relative overflow-hidden backdrop-blur-xl">
                 <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -907,6 +967,60 @@ export default function App() {
                     <span className="text-lg font-black text-cyan-455 text-cyan-300">{resultsConvenience.toFixed(1)}_</span>
                   </div>
                 </div>
+              </div>
+
+              {/* NEWLY UNLOCKED BADGES REWARDS PANEL */}
+              <div id="session-rewards-panel" className="bg-gradient-to-r from-emerald-950/40 to-teal-950/40 border border-emerald-500/20 p-6 sm:p-8 rounded-3xl shadow-lg space-y-4 backdrop-blur-md text-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                  <Award className="w-32 h-32 text-emerald-400" />
+                </div>
+                
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-400 block font-mono">
+                    🏅 REWARDS UNLOCKED • ปลดล็อกรางวัลเกียรติยศ
+                  </span>
+                  <h4 className="text-sm font-extrabold text-white">
+                    คุณบรรลุเงื่อนไขเหรียญรางวัลในเทอมจำลองนี้ทั้งหมด {resultsBadgesEarned.length} เหรียญ
+                  </h4>
+                </div>
+
+                {resultsBadgesEarned.length > 0 ? (
+                  <div className="flex flex-wrap justify-center gap-3 pt-2">
+                    {resultsBadgesEarned.map((badgeId) => {
+                      const badgeObj = BADGES.find(b => b.id === badgeId);
+                      if (!badgeObj) return null;
+                      
+                      const getIcon = (id: string) => {
+                        const styleCls = "w-7 h-7 text-emerald-400";
+                        switch (id) {
+                          case "badge_earth_guardian": return <Globe className={styleCls} />;
+                          case "badge_green_rider": return <Bike className={styleCls} />;
+                          case "badge_water_saver": return <Droplets className={styleCls} />;
+                          case "badge_energy_hero": return <Zap className={styleCls} />;
+                          case "badge_zero_waste": return <Trash2 className={styleCls} />;
+                          case "badge_recycling_master": return <RefreshCw className={styleCls} />;
+                          case "badge_eco_champion": return <Award className={styleCls} />;
+                          case "badge_carbon_cutter": return <Scissors className={styleCls} />;
+                          case "badge_public_transport_hero": return <Bus className={styleCls} />;
+                          case "badge_sustainability_explorer": return <Compass className={styleCls} />;
+                          default: return <Award className={styleCls} />;
+                        }
+                      };
+
+                      return (
+                        <div key={badgeId} className="flex flex-col items-center bg-[#06100c] border border-emerald-500/30 rounded-2xl p-3 px-4 w-36 shadow-md hover:scale-105 transition-all">
+                          <div className="p-2.5 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-2">
+                            {getIcon(badgeId)}
+                          </div>
+                          <span className="text-[10px] font-black text-white leading-tight line-clamp-1">{badgeObj.name.split(" ")[0]}</span>
+                          <span className="text-[8px] text-white/50 mt-1 line-clamp-2 leading-tight">{badgeObj.description}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-white/50 italic">ยังไม่มีรางวัลเพิ่มเติมที่เด่นชัดในเซสชันรอบนี้ ลองเล่นรอบใหม่ด้วยตัวเลือกอื่นดูนะ!</p>
+                )}
               </div>
 
               {/* DETAILED DECISION CHRONOLOGY & SCORES BREAKDOWN */}
